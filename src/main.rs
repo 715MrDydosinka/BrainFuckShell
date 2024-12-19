@@ -15,7 +15,7 @@ fn shell_prompt() -> String{
 }
 
 fn motd() {
-    println!("Glad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\n")
+    println!("Glad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\nIf you need some help, type 'help' :)")
 }
 
 fn motn() {
