@@ -7,12 +7,11 @@ use std::collections::VecDeque;
 use std::env;
 
 fn shell_prompt() -> String{
-
     let username = env::var_os("USER")
         .map(|os_str| os_str.to_string_lossy().into_owned())
         .unwrap_or_else(|| "@NULL".to_string());
 
-    return format!("BF'ed {} in $CUR_PATH > ", username);
+    return format!("BF'ed {} > ", username);
 }
 
 fn motd() {
@@ -112,12 +111,7 @@ fn interpret(code: &str) -> String {
 fn main() {
 
     motd();
-    
-    /*let env_shell = match env::current_exe() {
-        Ok(path) => path,
-        Err(_) => "BFShell".into(),
-    };*/
-
+ 
     loop {
         print!("{}", shell_prompt());
         io::stdout().flush().unwrap();
