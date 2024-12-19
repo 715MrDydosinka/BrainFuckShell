@@ -5,11 +5,15 @@ use std::collections::VecDeque;
 use std::env;
 use regex::Regex;
 
+mod suicide;
+use suicide::roulete;
+
 struct Shell{
     args: Vec<String>,
     //Placeholder
     current_dir: PathBuf,
 
+    suicide_mode: bool,
     dummy_mode: bool
 }
 
@@ -19,6 +23,7 @@ impl Shell {
         Shell{
             args:args,
             current_dir: env::current_dir().unwrap(),
+            suicide_mode: false,
             dummy_mode: false
         }
     }
@@ -171,7 +176,7 @@ impl Shell {
         None
     }
 
-    fn execute_extenal(command: &str, args: Vec<&str>) -> Option<String> {
+    fn execute_extenal(&mut self, command: &str, args: Vec<&str>) -> Option<String> {
         //println!("{}, {:?}", command, args);
         match Command::new(command).args(&args).spawn() {
             Ok(mut child) => {
@@ -180,7 +185,12 @@ impl Shell {
                 }
             }
             Err(e) => {
-                return Some(format!("Error executing command '{}': {}", command, e).to_owned());
+                if e.kind() == io::ErrorKind::NotFound {
+                    if self.suicide_mode { roulete(); }
+                    return Some(format!("Command not found: '{}'", command).to_owned());
+                } else {
+                    return Some(format!("Error executing command '{}': {}", command, e).to_owned());
+                }
             }
         }
 
@@ -241,7 +251,7 @@ impl Shell {
                 "cd"     => self.cd(args),
                 "export" => Shell::export(args),
                 "cm"     => self.cm(),
-                _ => Shell::execute_extenal(command, args)       
+                _ => Shell::execute_extenal(self,command, args)       
             };
 
             if let Some(err) = err {
