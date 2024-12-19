@@ -3,10 +3,26 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::collections::{HashMap, VecDeque};
 use std::env;
+use evar::Evars;
 use regex::Regex;
 
 mod suicide;
+use subprogramms::{*};
 use suicide::roulete;
+
+mod subprogramms {
+    pub mod lvar;
+    pub mod evar;
+}
+
+pub trait Executable {
+    fn exec(&mut self, args:Vec<&str>) -> u8;
+}
+
+pub trait SExecutable {
+    fn exec(args:Vec<&str>) -> u8; 
+}
+
 
 struct Shell{
     //Just a placeholder for this moment
@@ -14,7 +30,7 @@ struct Shell{
 
     current_dir: PathBuf,
 
-    local_vars:HashMap<String,String>,
+    local_vars:lvar::Lvars,
 
     suicide_mode: bool,
     dummy_mode: bool
@@ -26,7 +42,7 @@ impl Shell {
         Shell{
             args:args,
             current_dir: env::current_dir().unwrap(),
-            local_vars:HashMap::new(),
+            local_vars:lvar::Lvars::new(),
             suicide_mode: false,
             dummy_mode: true
         }
@@ -171,59 +187,8 @@ impl Shell {
         return None
     }
 
-    fn evar(args: Vec<&str>) -> Option<String> {
 
-        match args.len() {
-            0 => {
-                for (key, value) in env::vars() {
-                    println!("'{}' : '{}'", key, value);
-                }
-            }
-            1 => { 
-                match env::var(args[0]) {
-                    Ok(value) => println!("'{}' : '{}'", args[0], value),
-                    Err(e) => println!("Couldn't read {}: {}", args[0], e),
-                }
-            }
-            2 => {
-                unsafe { env::set_var(args[0], args[1]); }
-            }
-            _ => return Some("Too many args for command 'set'".to_owned())
 
-        }
-
-        None
-
-    }
-
-    fn lvar(&mut self, args: Vec<&str>) -> Option<String> {
-        match args.len() {
-            0 => {
-                println!("Local variables:");
-                if self.local_vars.is_empty() {
-                    println!("[Empty]");
-                    return None
-                }
-                for (key, value) in &self.local_vars{
-                    println!("'{}' : '{}'", key, value)
-                }
-            }
-            1 => { 
-                if let Some(value) = self.local_vars.get(args[0]) {
-                    println!("'{}' : '{}'", args[0], value);
-                } else {
-                    println!("Variable '{}' is missing.", args[0]);
-                }
-            }
-            2 => {
-                self.local_vars.insert(args[0].to_owned(), args[1].to_owned());
-            }
-            _ => return Some("Too many args for command 'set'".to_owned())
-
-        }
-
-        None
-    }
 
     fn cm(&mut self) -> Option<String> {
         self.dummy_mode = !self.dummy_mode;
@@ -234,8 +199,17 @@ impl Shell {
         //println!("{}, {:?}", command, args);
         match Command::new(command).args(&args).spawn() {
             Ok(mut child) => {
-                if let Err(e) = child.wait() {
-                    return Some(format!("Error while waiting for command to finish: {}", e).to_owned());
+                match child.wait() {
+                    Ok(status) => {
+                        if let Some(code) = status.code() {
+                            println!("Process exited with code: {}", code);
+                        } else {
+                            println!("Process terminated by signal");
+                        }
+                    }
+                    Err(e) => {
+                        return Some(format!("Error while waiting for command to finish: {}", e).to_owned());
+                    }
                 }
             }
             Err(e) => {
@@ -246,7 +220,7 @@ impl Shell {
                     return Some(format!("Error executing command '{}': {}", command, e).to_owned());
                 }
             }
-        }
+        } 
 
         None
     }
@@ -299,19 +273,15 @@ impl Shell {
 
             let (command, args) = Shell::split_prompt(&prompt);
             
-            let err: Option<String> = match command{
+            let _:u8 = match command{
                 "exit"   => break,
-                "help"   => Shell::help(),
-                "cd"     => self.cd(args),
-                "evar"    => Shell::evar(args),
-                "lvar"    => self.lvar(args),
-                "cm"     => self.cm(),
-                _ => Shell::execute_extenal(self,command, args)       
+                "help"   => {Shell::help(); 0},
+                "cd"     => {self.cd(args); 0},
+                "evar"    => Evars::exec(args),
+                "lvar"    => self.local_vars.exec(args),
+                "cm"     => {self.cm(); 0},
+                _ => { Shell::execute_extenal(self,command, args); 0}
             };
-
-            if let Some(err) = err {
-                eprintln!("{}", err);
-            }
         }
 
         Shell::motn();
@@ -327,3 +297,4 @@ fn main() {
     let mut shell = Shell::parse_args(args);
     shell.start();
 }
+
