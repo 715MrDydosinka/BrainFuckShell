@@ -36,7 +36,6 @@ P.S. I've been to lazy to use loops in this example -_-
 
 ## TODO
     - lexer
-    - variables
     - И так далее
 
 ## License

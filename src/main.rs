@@ -1,7 +1,7 @@
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::env;
 use regex::Regex;
 
@@ -9,9 +9,12 @@ mod suicide;
 use suicide::roulete;
 
 struct Shell{
+    //Just a placeholder for this moment
     args: Vec<String>,
-    //Placeholder
+
     current_dir: PathBuf,
+
+    local_vars:HashMap<String,String>,
 
     suicide_mode: bool,
     dummy_mode: bool
@@ -23,8 +26,9 @@ impl Shell {
         Shell{
             args:args,
             current_dir: env::current_dir().unwrap(),
+            local_vars:HashMap::new(),
             suicide_mode: false,
-            dummy_mode: false
+            dummy_mode: true
         }
     }
     
@@ -144,7 +148,7 @@ impl Shell {
             return Some("No directory specified".to_owned())
         }
         if args.len() > 1 {
-            return Some("Too many args for cd command".to_owned())
+            return Some("Too many args for command 'cd'".to_owned())
         }
 
 
@@ -167,8 +171,58 @@ impl Shell {
         return None
     }
 
-    fn export(args: Vec<&str>) -> Option<String> {
-        todo!("TODO export")
+    fn evar(args: Vec<&str>) -> Option<String> {
+
+        match args.len() {
+            0 => {
+                for (key, value) in env::vars() {
+                    println!("'{}' : '{}'", key, value);
+                }
+            }
+            1 => { 
+                match env::var(args[0]) {
+                    Ok(value) => println!("'{}' : '{}'", args[0], value),
+                    Err(e) => println!("Couldn't read {}: {}", args[0], e),
+                }
+            }
+            2 => {
+                unsafe { env::set_var(args[0], args[1]); }
+            }
+            _ => return Some("Too many args for command 'set'".to_owned())
+
+        }
+
+        None
+
+    }
+
+    fn lvar(&mut self, args: Vec<&str>) -> Option<String> {
+        match args.len() {
+            0 => {
+                println!("Local variables:");
+                if self.local_vars.is_empty() {
+                    println!("[Empty]");
+                    return None
+                }
+                for (key, value) in &self.local_vars{
+                    println!("'{}' : '{}'", key, value)
+                }
+            }
+            1 => { 
+                if let Some(value) = self.local_vars.get(args[0]) {
+                    println!("'{}' : '{}'", args[0], value);
+                } else {
+                    println!("Variable '{}' is missing.", args[0]);
+                }
+            }
+            2 => {
+                self.local_vars.insert(args[0].to_owned(), args[1].to_owned());
+            }
+            _ => return Some("Too many args for command 'set'".to_owned())
+
+        }
+
+        None
     }
 
     fn cm(&mut self) -> Option<String> {
@@ -249,7 +303,9 @@ impl Shell {
                 "exit"   => break,
                 "help"   => Shell::help(),
                 "cd"     => self.cd(args),
-                "export" => Shell::export(args),
+                "evar"    => Shell::evar(args),
+                "lvar"    => self.lvar(args),
+                "export" => Shell::evar(args),
                 "cm"     => self.cm(),
                 _ => Shell::execute_extenal(self,command, args)       
             };
@@ -267,7 +323,7 @@ impl Shell {
 
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().skip(1).collect();
 
     let mut shell = Shell::parse_args(args);
     shell.start();
