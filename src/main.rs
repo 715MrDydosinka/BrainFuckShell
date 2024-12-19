@@ -305,7 +305,6 @@ impl Shell {
                 "cd"     => self.cd(args),
                 "evar"    => Shell::evar(args),
                 "lvar"    => self.lvar(args),
-                "export" => Shell::evar(args),
                 "cm"     => self.cm(),
                 _ => Shell::execute_extenal(self,command, args)       
             };
