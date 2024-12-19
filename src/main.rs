@@ -4,6 +4,8 @@ use std::process::Command;
 use std::collections::VecDeque;
 use std::env;
 
+mod internal_com;
+
 struct Shell{
     args: Vec<String>,
     //Placeholder
@@ -111,7 +113,7 @@ impl Shell {
         Ok(_result)
     }
 
-    fn help() {
+    fn help() -> Option<String> {
 
         let help = 
         "BrainFuck Shell - Is a command-line interactive shell where all commands must be written in the Brainfuck language.
@@ -130,14 +132,15 @@ impl Shell {
         ";
 
         println!("{}", help);
+        None
     }
 
-    fn cd(&mut self, args: Vec<&str>) -> Result<String,String> {
+    fn cd(&mut self, args: Vec<&str>) -> Option<String> {
         if args.is_empty() {
-            return Err("No directory specified".to_owned())
+            return Some("No directory specified".to_owned())
         }
         if args.len() > 1 {
-            return Err("Too many args for cd command".to_owned())
+            return Some("Too many args for cd command".to_owned())
         }
 
 
@@ -148,37 +151,40 @@ impl Shell {
             if new_dir.exists() && new_dir.is_dir() {
                 new_dir
             } else {
-                return Err("Directory not found".to_owned());
+                return Some("Directory not found".to_owned());
             }
         };
 
         self.current_dir = new_dir;
         if env::set_current_dir(&self.current_dir).is_err() {
-            return Err("Failed to change directory".to_owned())
+            return Some("Failed to change directory".to_owned())
         };
 
-        Ok("".to_owned())
+        return None
     }
 
-    fn export(args: Vec<&str>) {
+    fn export(args: Vec<&str>) -> Option<String> {
         todo!("TODO export")
     }
 
-    fn cm(&mut self) {
+    fn cm(&mut self) -> Option<String> {
         self.dummy_mode = !self.dummy_mode;
+        None
     }
 
-    fn execute_extenal(command: &str, args: Vec<&str>) {
+    fn execute_extenal(command: &str, args: Vec<&str>) -> Option<String> {
         match Command::new(command).args(&args).spawn() {
             Ok(mut child) => {
                 if let Err(e) = child.wait() {
-                    eprintln!("Error while waiting for command to finish: {}", e);
+                    return Some(format!("Error while waiting for command to finish: {}", e).to_owned());
                 }
             }
             Err(e) => {
-                eprintln!("Error executing command '{}': {}", command, e);
+                return Some(format!("Error executing command '{}': {}", command, e).to_owned());
             }
         }
+
+        None
     }
 
     fn start(&mut self){
@@ -224,13 +230,17 @@ impl Shell {
             };
             let args: Vec<&str> = parts.collect();
 
-            match command{
-                "exit"   => { break; },
-                "help"   => { Shell::help();   }
-                "cd"     => { self.cd(args);     }
-                "export" => { Shell::export(args); }
-                "cm" => { self.cm(); }
-                _ => { Shell::execute_extenal(command, args); }        
+            let err: Option<String> = match command{
+                "exit"   => break,
+                "help"   => Shell::help(),
+                "cd"     => self.cd(args),
+                "export" => Shell::export(args),
+                "cm"     => self.cm(),
+                _ => Shell::execute_extenal(command, args)       
+            };
+
+            if let Some(err) = err {
+                eprintln!("{}", err);
             }
         }
 
