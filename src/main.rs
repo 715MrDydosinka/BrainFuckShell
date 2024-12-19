@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::env;
 
 struct Shell{
+    //Placeholder
     current_path: String
 }
 
@@ -24,7 +25,7 @@ impl Shell {
     }
 
     fn motd() {
-        println!("Glad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\nIf you need some help, type 'help' :)")
+        println!("\nGlad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\nIf you need some help, type 'help' :)")
     }
 
     fn motn() {
@@ -176,7 +177,7 @@ impl Shell {
             }
         }
 
-    Shell::motn();
+        Shell::motn();
     }
 
 }
@@ -186,6 +187,5 @@ impl Shell {
 fn main() {
     let shell = Shell::new();
     shell.start();
-    
 }
 
