@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::collections::VecDeque;
 use std::env;
+use regex::Regex;
 
 struct Shell{
     args: Vec<String>,
@@ -100,7 +101,18 @@ impl Shell {
                     }
                 }
                 _ => {}
+            }fn split_by_spaces_with_quotes(input: &str) -> Vec<String> {
+                let re = Regex::new(r#""([^"]*)"|'([^']*)'|(\S+)"#).unwrap();
+                re.captures_iter(input)
+                    .map(|cap| {
+                        cap.iter()
+                            .filter_map(|m| m.map(|m| m.as_str().to_string()))
+                            .next()
+                            .unwrap_or_default()
+                    })
+                    .collect()
             }
+            
             instruction_ptr += 1;
         }
         //println!("{:?}", memory);
@@ -171,6 +183,7 @@ impl Shell {
     }
 
     fn execute_extenal(command: &str, args: Vec<&str>) -> Option<String> {
+        println!("{}, {:?}", command, args);
         match Command::new(command).args(&args).spawn() {
             Ok(mut child) => {
                 if let Err(e) = child.wait() {
@@ -185,6 +198,26 @@ impl Shell {
         None
     }
 
+    fn split_prompt(input: &str) -> (&str, Vec<&str>) {
+        let re = Regex::new(r#""([^"]*)"|'([^']*)'|(\S+)"#).unwrap();
+        let captured: Vec<&str> = re.captures_iter(input)
+            .map(|cap| {
+                cap.iter()
+                    .filter_map(|m| m.map(|m| m.as_str()))
+                    .next()
+                    .unwrap_or_default()
+            })
+            .collect();
+        
+        if captured.is_empty() {
+            ("", Vec::new())
+        } else {
+            let command = captured[0];
+            let args = captured[1..].to_vec();
+            (command, args)
+        }
+    }
+     
     fn start(&mut self){
         Shell::motd();
  
@@ -220,14 +253,16 @@ impl Shell {
                 }
             }
 
+            let (command, args) = Shell::split_prompt(prompt.trim());
+            
 
-            let mut parts = prompt.trim().split_whitespace();
+            /*let mut parts = prompt.trim().split_whitespace();
             let command = match parts.next() {
                 Some(cmd) => cmd,
                 None => continue,
             };
             let args: Vec<&str> = parts.collect();
-
+            */
             let err: Option<String> = match command{
                 "exit"   => break,
                 "help"   => Shell::help(),
