@@ -199,24 +199,15 @@ impl Shell {
     }
 
     fn split_prompt(input: &str) -> (&str, Vec<&str>) {
-        let re = Regex::new(r#""([^"]*)"|'([^']*)'|(\S+)"#).unwrap();
-        let captured: Vec<&str> = re.captures_iter(input)
-            .map(|cap| {
-                cap.iter()
-                    .filter_map(|m| m.map(|m| m.as_str()))
-                    .next()
-                    .unwrap_or_default()
-            })
-            .collect();
-        
-        if captured.is_empty() {
-            ("", Vec::new())
-        } else {
-            let command = captured[0];
-            let args = captured[1..].to_vec();
-            (command, args)
-        }
-    }
+        let re = Regex::new(r#""([^"]*)"|'([^']*)'|(\S+)"#).unwrap(); 
+        let mut iter = re.captures_iter(input);
+        let first = iter.next().map(|cap| cap.get(0).unwrap().as_str()).unwrap_or("");
+        let rest = iter
+            .map(|cap| cap.get(0).unwrap().as_str().trim_matches(&['\'', '"'][..]))
+            .collect::<Vec<&str>>();
+
+        (first, rest)
+    } 
      
     fn start(&mut self){
         Shell::motd();
