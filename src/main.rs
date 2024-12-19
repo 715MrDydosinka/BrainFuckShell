@@ -4,8 +4,6 @@ use std::process::Command;
 use std::collections::VecDeque;
 use std::env;
 
-mod internal_com;
-
 struct Shell{
     args: Vec<String>,
     //Placeholder
