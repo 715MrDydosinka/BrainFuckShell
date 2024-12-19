@@ -172,7 +172,7 @@ impl Shell {
     }
 
     fn execute_extenal(command: &str, args: Vec<&str>) -> Option<String> {
-        println!("{}, {:?}", command, args);
+        //println!("{}, {:?}", command, args);
         match Command::new(command).args(&args).spawn() {
             Ok(mut child) => {
                 if let Err(e) = child.wait() {
@@ -233,16 +233,8 @@ impl Shell {
                 }
             }
 
-            let (command, args) = Shell::split_prompt(prompt.trim());
+            let (command, args) = Shell::split_prompt(&prompt);
             
-
-            /*let mut parts = prompt.trim().split_whitespace();
-            let command = match parts.next() {
-                Some(cmd) => cmd,
-                None => continue,
-            };
-            let args: Vec<&str> = parts.collect();
-            */
             let err: Option<String> = match command{
                 "exit"   => break,
                 "help"   => Shell::help(),
