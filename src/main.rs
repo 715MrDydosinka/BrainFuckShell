@@ -19,7 +19,7 @@ impl Shell {
         Shell{
             args:args,
             current_dir: env::current_dir().unwrap(),
-            dummy_mode: true
+            dummy_mode: false
         }
     }
     
