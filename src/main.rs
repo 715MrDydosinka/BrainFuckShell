@@ -101,18 +101,7 @@ impl Shell {
                     }
                 }
                 _ => {}
-            }fn split_by_spaces_with_quotes(input: &str) -> Vec<String> {
-                let re = Regex::new(r#""([^"]*)"|'([^']*)'|(\S+)"#).unwrap();
-                re.captures_iter(input)
-                    .map(|cap| {
-                        cap.iter()
-                            .filter_map(|m| m.map(|m| m.as_str().to_string()))
-                            .next()
-                            .unwrap_or_default()
-                    })
-                    .collect()
             }
-            
             instruction_ptr += 1;
         }
         //println!("{:?}", memory);
