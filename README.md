@@ -35,7 +35,8 @@ Command "fastfetch":
 P.S. I've been to lazy to use loops in this example -_-
 
 ## TODO
-    - echo
+    - lexer
+    - variables
     - cd
     - И так далее
 

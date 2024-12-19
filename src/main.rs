@@ -1,38 +1,50 @@
-
-
-
 use std::io::{self, Read, Write};
+use std::path::PathBuf;
 use std::process::Command;
 use std::collections::VecDeque;
 use std::env;
 
 struct Shell{
+    args: Vec<String>,
     //Placeholder
-    current_path: String
+    current_dir: PathBuf,
+
+    dummy_mode: bool
 }
 
 impl Shell {
 
-    pub fn new() -> Self{
-        Shell{ current_path: "/".to_owned() }
+    pub fn parse_args(args: Vec<String>) -> Self{
+        Shell{
+            args:args,
+            current_dir: env::current_dir().unwrap(),
+            dummy_mode: true
+        }
     }
     
     fn get_prompt(&self) -> String{
         let username = env::var_os("USER").map(|os_str| os_str.to_string_lossy().into_owned())
         .unwrap_or_else(|| "@NULL".to_string());
 
-        return format!("BF'ed {} > ", username);
+        let start: String;
+        if self.dummy_mode{
+            start = "Dummy ".to_owned();
+        }
+        else {
+            start = "BF'ed ".to_owned()
+        }
+        return format!("{}{} > ", start, username);
     }
 
     fn motd() {
-        println!("\nGlad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\nIf you need some help, type 'help' :)")
+        println!("Glad to see that you're using BrainFuckShell by Hlupa \nRemember, you're not welcome here.\nIf you need some help, type 'help' :)")
     }
 
     fn motn() {
         println!("Bye")
     }
 
-    fn interpret(code: &str) -> String {
+    fn interpret(code: &str) -> Result<String, String> {
         let mut memory = vec![0u8; 1024];
         let mut ptr = 0;
         let mut instruction_ptr = 0;
@@ -64,8 +76,7 @@ impl Shell {
                         while open_loops > 0 {
                             instruction_ptr += 1;
                             if instruction_ptr >= code.len() {
-                                eprintln!("Unmatched '[' in the code.");
-                                return "".to_owned();
+                                return Err("Unmatched '[' in the command.".to_owned());
                             }
                             if code[instruction_ptr] == '[' {
                                 open_loops += 1;
@@ -85,8 +96,7 @@ impl Shell {
                             loop_stack.pop_back();
                         }
                     } else {
-                        eprintln!("Unmatched ']' in the code.");
-                        return "".to_owned();
+                        return Err("Unmatched ']' in the command.".to_owned());
                     }
                 }
                 _ => {}
@@ -94,7 +104,11 @@ impl Shell {
             instruction_ptr += 1;
         }
         //println!("{:?}", memory);
-        return result.into_iter().collect();
+        let _result:String = result.into_iter().collect(); 
+        if _result.is_empty() {
+            return Err("".to_owned())
+        }
+        Ok(_result)
     }
 
     fn help() {
@@ -118,15 +132,56 @@ impl Shell {
         println!("{}", help);
     }
 
-    fn echo() {
-        todo!("TODO echo")
+    fn cd(&mut self, args: Vec<&str>) -> Result<String,String> {
+        if args.is_empty() {
+            return Err("No directory specified".to_owned())
+        }
+        if args.len() > 1 {
+            return Err("Too many args for cd command".to_owned())
+        }
+
+
+        let new_dir = if args[0] == ".." {
+            self.current_dir.parent().unwrap_or_else(|| &self.current_dir).to_path_buf()
+        } else {
+            let new_dir = self.current_dir.join(args[0]);
+            if new_dir.exists() && new_dir.is_dir() {
+                new_dir
+            } else {
+                return Err("Directory not found".to_owned());
+            }
+        };
+
+        self.current_dir = new_dir;
+        if env::set_current_dir(&self.current_dir).is_err() {
+            return Err("Failed to change directory".to_owned())
+        };
+
+        Ok("".to_owned())
     }
 
-    fn cd() {
-        todo!("TODO cd")
+    fn export(args: Vec<&str>) {
+        todo!("TODO export")
     }
 
-    fn start(self){
+    fn cm(&mut self) {
+        self.dummy_mode = !self.dummy_mode;
+    }
+
+    fn execute_extenal(command: &str, args: Vec<&str>) {
+        match Command::new(command).args(&args).spawn() {
+            Ok(mut child) => {
+                if let Err(e) = child.wait() {
+                    eprintln!("Error while waiting for command to finish: {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error executing command '{}': {}", command, e);
+            }
+        }
+    }
+
+    fn start(&mut self){
         Shell::motd();
  
         loop {
@@ -140,40 +195,42 @@ impl Shell {
                 continue;
             }
 
-            let result = Shell::interpret(&raw_input);
+            let prompt: String;
             
-            if result.is_empty() {
-                println!("");
-                continue;
+            if !self.dummy_mode{
+                prompt = match Shell::interpret(&raw_input) {
+                    Ok(value) => value,
+                    Err(err) => { 
+                        if !err.trim().is_empty() { 
+                            eprintln!("{}",err); 
+                        }
+                        continue;
+                    }
+                };
+                println!("Entered command: {}", prompt);
             }
-            print!("Entered command: <{}>\n", result);
-
-            let input = result.trim();
-        
-            match input{
-                "exit" => { break; },
-                "help" => { Shell::help(); continue; }
-                "echo" => { Shell::echo(); continue; }
-                "cd"   => { Shell::cd(); continue;}
-                _ => {}
+            else {
+                prompt = raw_input;
+                if prompt.trim().is_empty() {
+                    continue;
+                }
             }
 
-            let mut parts = input.split_whitespace();
+
+            let mut parts = prompt.trim().split_whitespace();
             let command = match parts.next() {
                 Some(cmd) => cmd,
                 None => continue,
             };
             let args: Vec<&str> = parts.collect();
 
-            match Command::new(command).args(&args).spawn() {
-                Ok(mut child) => {
-                    if let Err(e) = child.wait() {
-                        eprintln!("Error while waiting for command to finish: {}", e);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error executing command '{}': {}", command, e);
-                }
+            match command{
+                "exit"   => { break; },
+                "help"   => { Shell::help();   }
+                "cd"     => { self.cd(args);     }
+                "export" => { Shell::export(args); }
+                "cm" => { self.cm(); }
+                _ => { Shell::execute_extenal(command, args); }        
             }
         }
 
@@ -185,7 +242,8 @@ impl Shell {
 
 
 fn main() {
-    let shell = Shell::new();
+    let args: Vec<String> = env::args().collect();
+
+    let mut shell = Shell::parse_args(args);
     shell.start();
 }
-
