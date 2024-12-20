@@ -1,10 +1,19 @@
 use std::env;
+use std::env::VarError;
 
-use crate::SExecutable;
+use crate::Executable;
+use crate::LocalVars;
 
 pub struct Evars { }
 
 impl Evars {
+
+    pub fn evar_get_one(key:&str) -> Result<String, VarError>{
+        match env::var(key) {
+            Ok(value) => Ok(value),
+            Err(e) => Err(e)
+        }
+    }
 
     fn evar_print_all() {
         for (key, value) in env::vars() {
@@ -19,8 +28,9 @@ impl Evars {
         }
     }
 
+    #[allow(dead_code)] 
     fn evar_delete(key:&str) {
-
+        unsafe { env::remove_var(key); }
     }
 
     fn evar_add(key:&str, value:&str) {
@@ -42,9 +52,10 @@ impl Evars {
 
 }
 
-impl SExecutable for Evars{
+impl Executable for Evars{
 
-    fn exec(args:Vec<&str>) -> u8 {
+    fn exec(args:Vec<&str>, localvars: &mut LocalVars) -> u8 {
+        let _ = localvars;
         
 
         if let Some(err) = Evars::run(args){

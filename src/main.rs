@@ -1,39 +1,38 @@
-use std::io::{self, Read, Write};
-use std::path::PathBuf;
-use std::process::Command;
-use std::collections::{HashMap, VecDeque};
+use std::io::{self, Stdout, Write};
+use std::process::{Command, Stdio};
+use std::collections::VecDeque;
 use std::env;
+use cd::CD;
 use evar::Evars;
+use help::Help;
+use local_vars::{GetValue, LocalVars};
+//use local_vars;
+//use lvar::Lvars;
 use regex::Regex;
+
 
 mod suicide;
 use subprogramms::{*};
 use suicide::roulete;
 
 mod subprogramms {
-    pub mod lvar;
     pub mod evar;
+    pub mod help;
+    pub mod cd;
 }
+
+mod local_vars;
 
 pub trait Executable {
-    fn exec(&mut self, args:Vec<&str>) -> u8;
+    fn exec(args:Vec<&str>, localvars: &mut LocalVars) -> u8;
 }
-
-pub trait SExecutable {
-    fn exec(args:Vec<&str>) -> u8; 
-}
-
 
 struct Shell{
     //Just a placeholder for this moment
+    #[allow(dead_code)] 
     args: Vec<String>,
-
-    current_dir: PathBuf,
-
-    local_vars:lvar::Lvars,
-
-    suicide_mode: bool,
-    dummy_mode: bool
+ 
+    local_vars: LocalVars,
 }
 
 impl Shell {
@@ -41,10 +40,7 @@ impl Shell {
     pub fn parse_args(args: Vec<String>) -> Self{
         Shell{
             args:args,
-            current_dir: env::current_dir().unwrap(),
-            local_vars:lvar::Lvars::new(),
-            suicide_mode: false,
-            dummy_mode: true
+            local_vars  : LocalVars::new()
         }
     }
     
@@ -52,13 +48,12 @@ impl Shell {
         let username = env::var_os("USER").map(|os_str| os_str.to_string_lossy().into_owned())
         .unwrap_or_else(|| "@NULL".to_string());
 
-        let start: String;
-        if self.dummy_mode{
-            start = "Dummy ".to_owned();
-        }
-        else {
-            start = "BF'ed ".to_owned()
-        }
+        let start = if self.local_vars.get_bool("dummy_mode").unwrap_or(false) {
+            "Dummy ".to_owned()
+        } else {
+            "BF'ed ".to_owned()
+        };
+
         return format!("{}{} > ", start, username);
     }
 
@@ -137,67 +132,9 @@ impl Shell {
         Ok(_result)
     }
 
-    fn help() -> Option<String> {
-
-        let help = 
-        "BrainFuck Shell - Is a command-line interactive shell where all commands must be written in the Brainfuck language.
-        
-        Supported symbols:
-        > - Increment the data pointer by one (to point to the next cell to the right).
-        < - Decrement the data pointer by one (to point to the next cell to the left).
-        + - Increment the byte at the data pointer by one.
-        - - Decrement the byte at the data pointer by one.
-        . - Output the byte at the data pointer.
-        [ - If the byte at the data pointer is zero, then instead of moving the instruction pointer forward to the next command, jump it forward to the command after the matching ] command. 
-        ] - If the byte at the data pointer is nonzero, then instead of moving the instruction pointer forward to the next command, jump it back to the command after the matching [ command.
-        
-        Example:
-        'fastfetch' - ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.>
-        ";
-
-        println!("{}", help);
-        None
-    }
-
-    fn cd(&mut self, args: Vec<&str>) -> Option<String> {
-        if args.is_empty() {
-            return Some("No directory specified".to_owned())
-        }
-        if args.len() > 1 {
-            return Some("Too many args for command 'cd'".to_owned())
-        }
-
-
-        let new_dir = if args[0] == ".." {
-            self.current_dir.parent().unwrap_or_else(|| &self.current_dir).to_path_buf()
-        } else {
-            let new_dir = self.current_dir.join(args[0]);
-            if new_dir.exists() && new_dir.is_dir() {
-                new_dir
-            } else {
-                return Some("Directory not found".to_owned());
-            }
-        };
-
-        self.current_dir = new_dir;
-        if env::set_current_dir(&self.current_dir).is_err() {
-            return Some("Failed to change directory".to_owned())
-        };
-
-        return None
-    }
-
-
-
-
-    fn cm(&mut self) -> Option<String> {
-        self.dummy_mode = !self.dummy_mode;
-        None
-    }
-
     fn execute_extenal(&mut self, command: &str, args: Vec<&str>) -> Option<String> {
         //println!("{}, {:?}", command, args);
-        match Command::new(command).args(&args).spawn() {
+        match Command::new(command).args(&args).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn() {
             Ok(mut child) => {
                 match child.wait() {
                     Ok(status) => {
@@ -214,7 +151,11 @@ impl Shell {
             }
             Err(e) => {
                 if e.kind() == io::ErrorKind::NotFound {
-                    if self.suicide_mode { roulete(); }
+
+                    if self.local_vars.get_bool("suicide_mode") == Some(true) {
+                        roulete();
+                    }
+
                     return Some(format!("Command not found: '{}'", command).to_owned());
                 } else {
                     return Some(format!("Error executing command '{}': {}", command, e).to_owned());
@@ -251,8 +192,15 @@ impl Shell {
             }
 
             let prompt: String;
-            
-            if !self.dummy_mode{
+
+
+            if self.local_vars.get_bool("dummy_mode") == Some(true) {
+                prompt = raw_input;
+                if prompt.trim().is_empty() {
+                    continue;
+                }
+            }
+            else {
                 prompt = match Shell::interpret(&raw_input) {
                     Ok(value) => value,
                     Err(err) => { 
@@ -263,23 +211,17 @@ impl Shell {
                     }
                 };
                 println!("Entered command: {}", prompt);
-            }
-            else {
-                prompt = raw_input;
-                if prompt.trim().is_empty() {
-                    continue;
-                }
+            
+            
             }
 
             let (command, args) = Shell::split_prompt(&prompt);
             
             let _:u8 = match command{
                 "exit"   => break,
-                "help"   => {Shell::help(); 0},
-                "cd"     => {self.cd(args); 0},
-                "evar"    => Evars::exec(args),
-                "lvar"    => self.local_vars.exec(args),
-                "cm"     => {self.cm(); 0},
+                "help"   => Help::exec (args, &mut self.local_vars),
+                "cd"     => CD::exec   (args, &mut self.local_vars),
+                "evar"   => Evars::exec(args, &mut self.local_vars),
                 _ => { Shell::execute_extenal(self,command, args); 0}
             };
         }
