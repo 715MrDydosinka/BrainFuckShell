@@ -13,7 +13,7 @@ pub trait SetValue {
 }
 
 pub struct LocalVars {
-    store: HashMap<String, String>,
+    pub store: HashMap<String, String>,
 }
 
 impl LocalVars {

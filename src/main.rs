@@ -7,7 +7,7 @@ use evar::Evars;
 use help::Help;
 use local_vars::{GetValue, LocalVars};
 //use local_vars;
-//use lvar::Lvars;
+use lvar::Lvars;
 use regex::Regex;
 
 
@@ -17,6 +17,7 @@ use suicide::roulete;
 
 mod subprogramms {
     pub mod evar;
+    pub mod lvar;
     pub mod help;
     pub mod cd;
 }
@@ -132,7 +133,7 @@ impl Shell {
         Ok(_result)
     }
 
-    fn execute_extenal(&mut self, command: &str, args: Vec<&str>) -> Option<String> {
+    fn execute_extenal(command: &str, args: Vec<&str>, local_vars:&LocalVars) -> Option<String> {
         //println!("{}, {:?}", command, args);
         match Command::new(command).args(&args).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn() {
             Ok(mut child) => {
@@ -152,7 +153,7 @@ impl Shell {
             Err(e) => {
                 if e.kind() == io::ErrorKind::NotFound {
 
-                    if self.local_vars.get_bool("suicide_mode") == Some(true) {
+                    if local_vars.get_bool("suicide_mode") == Some(true) {
                         roulete();
                     }
 
@@ -211,8 +212,6 @@ impl Shell {
                     }
                 };
                 println!("Entered command: {}", prompt);
-            
-            
             }
 
             let (command, args) = Shell::split_prompt(&prompt);
@@ -222,7 +221,8 @@ impl Shell {
                 "help"   => Help::exec (args, &mut self.local_vars),
                 "cd"     => CD::exec   (args, &mut self.local_vars),
                 "evar"   => Evars::exec(args, &mut self.local_vars),
-                _ => { Shell::execute_extenal(self,command, args); 0}
+                "lvar"   => Lvars::exec(args, &mut self.local_vars),
+                _ => { Shell::execute_extenal(command, args, &self.local_vars); 0}
             };
         }
 
